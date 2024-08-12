@@ -1,0 +1,26 @@
+pipeline {
+    agent any
+ 
+    environment {
+        ROLE_ARN = 'arn:aws:iam::034353630586:role/prod-mgmt-jenkins-assumerole'
+        SESSION_NAME = 'JenkinsProdSession'
+        REGION = 'eu-west-1'        
+    }
+ 
+    stages {
+        stage('Assume and fetch') {
+            agent {
+                label 'docker'
+      }
+            steps {
+                withAWS(region: "${env.REGION}", role: "${env.ROLE_ARN}", roleSessionName: "${env.SESSION_NAME}") {
+                    script {
+                        sh """
+                            aws s3 ls
+                        """
+                    }
+                }
+            }
+        }
+    }
+}
