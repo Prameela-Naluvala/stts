@@ -1,1 +1,4 @@
 Cannot create enum from null value! Use com.amazonaws.regions.RegionUtils.getRegion to access regions that aren't known to this SDK version.
+docker: Error response from daemon: failed to create task for container: failed to create shim task: OCI runtime create failed: runc create failed: unable to start container process: exec: "./liquibaseMigration.sh": permission denied: unknown.
+
+script returned exit code 126
