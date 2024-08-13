@@ -1,0 +1,12 @@
+FROM fedora:29
+WORKDIR /work
+RUN yum install -y liquibase-cdi postgresql && \
+    rm -rf /var/cache/yum && \
+    curl -L https://raw.githubusercontent.com/Droplr/aws-env/master/bin/aws-env-linux-amd64 -o/usr/local/bin/aws-env && \
+    chmod +x /usr/local/bin/aws-env && aws-env
+COPY . .
+RUN chmod 777 /work/postgresql-42.5.4.jar
+ENTRYPOINT ["/work/entrypoint.sh"]
+
+
+      chmod +x entrypoint.sh liquibaseMigration.sh
