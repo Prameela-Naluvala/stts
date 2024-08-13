@@ -1,0 +1,1 @@
+Cannot create enum from null value! Use com.amazonaws.regions.RegionUtils.getRegion to access regions that aren't known to this SDK version.
