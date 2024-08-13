@@ -31,34 +31,6 @@ pipeline {
         REGION = 'eu-west-1'
     }
     stages {
-        stage('Build Docker Container') {
-            when {
-                anyOf {
-                    branch 'development'
-                    branch 'release'
-                    branch 'main'
-                }
-                beforeAgent true
-            }
-            agent {
-                label 'docker'
-            }
-            steps {
-                script {
-                    buildDockerContainer()
-                }
-            }
-            post {
-                failure {
-                    script {
-                        if ("${env.BRANCH_NAME}" == 'development' || "${env.BRANCH_NAME}" == 'main' || "${env.BRANCH_NAME}" == 'release') {
-                            office365ConnectorSend message: "Build Failed! ${env.JOB_NAME}", status: "Failure", color: "d00000", webhookUrl: buildfailureWebhook
-                        }
-                    }
-                }
-            }
-        }
-
         stage('Deploy to Development') {
             when {
                 branch 'development'
@@ -234,4 +206,61 @@ pipeline {
             agent {
                 label 'docker'
             }
-            stages
+            stages {
+                stage('Build Migrations docker image') {
+                    steps {
+                        dir("migrations") {
+                            sh "docker build -t local/migrations ."
+                        }
+                    }
+                }
+                stage('Liquibase migration') {
+                    steps {
+                        sh """
+                            chmod +x '${(env.WORKSPACE)}/migrations/liquibaseMigration.sh' '${(env.WORKSPACE)}/migrations/entrypoint.sh'
+                        """                                                 
+                        sh """
+                            docker run --rm --entrypoint='' \
+                            -w /work/migrations \
+                            -v \$(pwd)/migrations:/work/migrations \
+                            -e AWS_REGION='${region}' \
+                            -e AWS_ENV_PATH='/mgmt/jenkins/prod/${appName}/' \
+                            local/migrations \
+                            ./liquibaseMigration.sh prod
+                        """
+                    }
+                    post {
+                        always {
+                            dir('migrations') {
+                                archiveArtifacts artifacts: 'migration-plan.sql', fingerprint: false
+                            }
+                        }
+                        failure {
+                            script {
+                                if ("${env.BRANCH_NAME}" == 'main') {
+                                    office365ConnectorSend message: "Liquibase Migration for Prod-cons-1 Failed! ${env.JOB_NAME}", status: "Failure", color: "d00000", webhookUrl: buildfailureWebhook
+                                }
+                            }
+                        }
+                    }
+                }
+                stage('Deploy') {
+                    steps {
+                        script {
+                            buildDockerContainer()
+                            sh "docker exec statscontainer sh -c 'cd /src/lambda/statsmodule && chalice deploy --stage prod --connection-timeout 300'"
+                        }
+                    }
+                    post {
+                        success {
+                            office365ConnectorSend message: "Deployed Stats Prod-cons-1 ${env.JOB_NAME} - ${env.BUILD_NUMBER}", status: "Success", color: "50df16", webhookUrl: devopsWebhook
+                        }
+                        aborted {
+                            office365ConnectorSend message: "Could not deploy Stats Prod-cons-1 ${env.JOB_NAME} - ${env.BUILD_NUMBER}", status: "Aborted", color: "999999", webhookUrl: buildfailureWebhook
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
