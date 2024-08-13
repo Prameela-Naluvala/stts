@@ -2,3 +2,9 @@ Cannot create enum from null value! Use com.amazonaws.regions.RegionUtils.getReg
 docker: Error response from daemon: failed to create task for container: failed to create shim task: OCI runtime create failed: runc create failed: unable to start container process: exec: "./liquibaseMigration.sh": permission denied: unknown.
 
 script returned exit code 126
+sh "'chmod +x ${(pwd)}/migrations/liquibaseMigration.sh ${(pwd)}/migrations/entrypoint.sh '"
+sh "'chmod +x ${(pwd)}/migrations/liquibaseMigration.sh ${(pwd)}/migrations/entrypoint.sh '"
+
+ 96: illegal string body character after dollar sign;
+   solution: either escape a literal dollar sign "\$5" or bracket the value expression "${5}" @ line 96, column 33.
+                                   sh """
