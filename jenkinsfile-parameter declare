@@ -1,0 +1,141 @@
+pipeline {
+  agent none
+  options {
+    disableConcurrentBuilds()
+    timeout(time: 12, unit: 'HOURS')
+    timestamps()
+    ansiColor('xterm')
+  }
+
+  stages {
+    stage('Unit tests') {
+      when {
+        expression { 
+          return env.BRANCH_NAME ==~ /(master|release|development)/ 
+        }
+        beforeAgent true
+      }
+      agent {
+        label 'docker'
+      }
+      options {
+        timeout(time: 2, unit: 'HOURS')
+      }
+      steps {
+        sh "docker build -f Dockerfile.maven -t local/maven ."
+        sh "docker run --name maven local/maven mvn test"
+      }
+      post {
+        always {
+          sh "docker cp maven:/work/target highwire-unit-tests || exit 0"
+          sh "docker rm maven"
+          archiveArtifacts artifacts: 'highwire-unit-tests/**', fingerprint: false
+          junit 'highwire-unit-tests/surefire-reports/*.xml'
+        }
+        failure {
+          script {
+            office365ConnectorSend message: "Unit Tests Failed! ${env.JOB_NAME} - ${env.BUILD_NUMBER}", status: "Failure", color: "d00000", webhookUrl: buildfailureWebhook
+          }
+        }
+      }
+    }
+
+    stage('Build Container') {
+      when {
+        expression { 
+          return env.BRANCH_NAME ==~ /(master|release|development)/ 
+        }
+        beforeAgent true
+      }
+      agent {
+        label 'docker'
+      }
+      stages {
+        stage('Docker build') {
+          steps {
+            office365ConnectorSend message:"Build started ${env.JOB_NAME} - ${env.BUILD_NUMBER} (<${env.BUILD_URL}|Open>)", status: "Started", color: "999999", webhookUrl: devopsWebhook
+            sh "docker build . -t ${repository}:${getAppVersionWithBranchName()}"
+          }
+          post {
+            failure {
+              script {
+                office365ConnectorSend message: "Build Failed! ${env.JOB_NAME} - ${env.BUILD_NUMBER}", status: "Failure", color: "d00000", webhookUrl: buildfailureWebhook
+              }
+            }
+          }
+        }
+        stage('Docker push') {
+          steps {
+            ecrLogin()
+            sh "docker push ${repository}:${getAppVersionWithBranchName()}"
+          }
+        }
+      }
+    }
+
+    stage('Deploy to Stage') {
+      when {
+        expression { 
+          return env.BRANCH_NAME ==~ /(development)/ 
+        }
+        beforeAgent true
+      }
+      agent {
+        label 'docker'
+      }
+      stages {
+        stage('Build Migrations docker image') {
+          steps {
+            buildMigrationsdockerImage()
+          }
+        }
+        stage('Database Wipe') {
+          when {
+            expression { return params.wipeStageDatabase }
+            beforeAgent true
+          }
+          steps {
+            sh """
+              docker run --rm --entrypoint='' \
+                -w /work \
+                -v \$(pwd)/wipeStageDB.sh:/work/wipeStageDB.sh \
+                -e AWS_REGION='${region}' \
+                -e AWS_ENV_PATH='/mgmt/jenkins/${stageEnv}/${appName}/' \
+                  local/migrations \
+                    ./wipeStageDB.sh
+            """
+          }
+        }
+        stage('Liquibase migration') {
+          steps {
+            namedLiquibaseMigration('stage')
+          }
+          post {
+            always {
+              dir('migrations') {
+                archiveArtifacts artifacts: 'migration-plan.sql', fingerprint: false
+              }
+            }
+            failure {
+              script {
+                office365ConnectorSend message: "Liquibase Migration for ${stageEnv} Failed! ${env.JOB_NAME} - ${env.BUILD_NUMBER}", status: "Failure", color: "d00000", webhookUrl: buildfailureWebhook
+              }
+            }
+          }
+        }
+        stage('Deploy') {
+          steps {
+            deployerDeploy('stage')
+          }
+          post {
+            success {
+              office365ConnectorSend message: "Deployed Stage ${env.JOB_NAME} - ${env.BUILD_NUMBER} - ${getAppVersionWithBranchName()}", status: "Success", color: "50df16", webhookUrl: backendWebhook
+            }
+          }
+        }
+      }
+    }
+
+    // Other stages...
+  }
+}
