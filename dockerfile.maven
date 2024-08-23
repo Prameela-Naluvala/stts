@@ -7,3 +7,23 @@ WORKDIR /work
 COPY pom.xml .
 RUN mvn test clean --fail-never -DskipTests=true
 COPY src src
+
+
+
+
+FROM maven:3.6-openjdk-17-slim
+
+# Install necessary packages including font libraries
+RUN apt-get update && apt-get install -y \
+    libfreetype6 \
+    fontconfig \
+    libxext6 \
+    libxrender1 \
+    libxtst6 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /work
+COPY pom.xml .
+RUN mvn test clean --fail-never -DskipTests=true
+COPY src src
+
