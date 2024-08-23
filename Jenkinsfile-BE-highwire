@@ -1,0 +1,2112 @@
+devopsWebhook   = 'https://fundsaxis2.webhook.office.com/webhookb2/60d237ee-f3a2-4f04-adb7-27959c127730@c56018d0-aefb-49ba-adda-e4ddb4438bcf/IncomingWebhook/b44f555c2135422c81d3b9a2d7244d72/639cc0b8-ad5d-4c14-8940-211e40ef15c7'
+frontendWebhook = 'https://fundsaxis2.webhook.office.com/webhookb2/60d237ee-f3a2-4f04-adb7-27959c127730@c56018d0-aefb-49ba-adda-e4ddb4438bcf/IncomingWebhook/b44f555c2135422c81d3b9a2d7244d72/639cc0b8-ad5d-4c14-8940-211e40ef15c7'
+backendWebhook  = 'https://fundsaxis2.webhook.office.com/webhookb2/60d237ee-f3a2-4f04-adb7-27959c127730@c56018d0-aefb-49ba-adda-e4ddb4438bcf/IncomingWebhook/b44f555c2135422c81d3b9a2d7244d72/639cc0b8-ad5d-4c14-8940-211e40ef15c7'
+approvalrequestWebhook = 'https://fundsaxis2.webhook.office.com/webhookb2/60d237ee-f3a2-4f04-adb7-27959c127730@c56018d0-aefb-49ba-adda-e4ddb4438bcf/IncomingWebhook/4638f756543e4b6a9da685c955a4b555/a8db0d6a-19a5-4f60-8453-d3d41add906f'
+buildfailureWebhook = 'https://fundsaxis2.webhook.office.com/webhookb2/60d237ee-f3a2-4f04-adb7-27959c127730@c56018d0-aefb-49ba-adda-e4ddb4438bcf/IncomingWebhook/39637e2c0b3348349cb3fb4be37cc4fa/a8db0d6a-19a5-4f60-8453-d3d41add906f'
+region              = "eu-west-1"
+
+repository       = "606016206675.dkr.ecr.eu-west-1.amazonaws.com/fundsaxis/highwire"
+deployerRepository  = "606016206675.dkr.ecr.eu-west-1.amazonaws.com/fundsaxis/jenkins-deployment:v2"
+appRepository  = "606016206675.dkr.ecr.eu-west-1.amazonaws.com/fundsaxis/highwire"
+
+appName             = "highwire"
+highwireUrl         = "https://highwire.stage.fundsaxis.org/"
+
+stageEnv            = 'stage'
+stageCluster        = 'stage'
+
+prodEnv             = 'prod'
+prodCluster         = 'prod'
+
+prodv2Env           = 'prod-v2'
+prodv2Cluster       = 'prod'
+
+evelynEnv          = 'evelyn'
+evelynCluster      = 'evelyn'
+
+testEnv             = 'test'
+testCluster         = 'test'
+
+transitionEnv       = 'transition'
+transitionCluster   = 'transition'
+
+equitytrusteesEnv   = 'equitytrustees'
+equitytrusteesCluster  = 'equitytrustees'
+
+intertrustEnv      = 'intertrust'
+intertrustCluster  = 'intertrust'
+
+thesisEnv          = 'thesis'
+thesisCluster      = 'thesis'
+
+yealandEnv          = 'yealand'
+yealandCluster      = 'yealand'
+
+phoenixEnv             = 'phoenix'
+phoenixCluster         = 'phoenix'
+
+handelsbankenEnv          = 'handelsbanken'
+handelsbankenCluster      = 'handelsbanken'
+
+marlboroughEnv          = 'marlborough'
+marlboroughCluster      = 'marlborough'
+
+canaccordEnv          = 'canaccord'
+canaccordCluster      = 'canaccord'
+
+tbaileyEnv          = 'tbailey'
+tbaileyCluster      = 'tbailey'
+
+wayEnv          = 'way'
+wayCluster      = 'way'
+
+bailliegiffordEnv          = 'bailliegifford'
+bailliegiffordCluster      = 'bailliegifford'
+
+onefundEnv          = 'onefund'
+onefundCluster      = 'onefund'
+
+maitlandEnv          = 'maitland'
+maitlandCluster      = 'maitland'
+
+halEnv          = 'hal'
+halCluster      = 'hal'
+
+globalEnv          = 'global'
+globalCluster      = 'global'
+
+disclosuresEnv          = 'disclosures'
+disclosuresCluster      = 'disclosures'
+
+demoEnv          = 'demo'
+demoCluster      = 'demo'
+
+caceisEnv          = 'caceis'
+caceisCluster      = 'caceis'
+
+carneEnv          = 'carne'
+carneCluster      = 'carne'
+
+branchName = ""
+appVersion = ""
+
+def ecrLogin() {
+    sh "eval \$(aws ecr get-login --no-include-email --region=eu-west-1)"    
+}
+
+def getBranchName() {
+  if( ! branchName ) {
+    branchName = env.BRANCH_NAME.toLowerCase().replaceAll("/", "__")
+  }
+  return branchName
+}
+
+def getAppVersion() {
+  if( ! appVersion ) {
+    appVersion = sh(returnStdout: true, script: 'git log -1 --pretty=\'format:%cd-%h\' --date=\'short\'').trim()
+  }
+  return appVersion
+}
+
+def getAppVersionWithBranchName() {
+  branchName = getBranchName()
+  appVersion = getAppVersion()
+  return "${appVersion}-${branchName}"
+}
+
+def buildMigrationsdockerImage() {
+  dir("migrations") {
+        sh "docker build -t local/migrations ."
+  }
+}
+
+def namedLiquibaseMigration(name) {  
+  sh """
+    docker run --rm --entrypoint='' \
+      -w /work/migrations \
+      -v \$(pwd)/migrations:/work/migrations \
+      -e AWS_REGION='${region}' \
+      -e AWS_ENV_PATH='/mgmt/jenkins/${name}/${appName}/' \
+        local/migrations \
+          ./liquibaseMigration.sh ${name}
+  """
+}
+
+def liquibaseMigration(name) {  
+  sh """
+    docker run --rm --entrypoint='' \
+      -w /work/migrations \
+      -v \$(pwd)/migrations:/work/migrations \
+      -e AWS_REGION='${region}' \
+      -e AWS_ENV_PATH='/mgmt/jenkins/${name}/${appName}/' \
+        local/migrations \
+          ./liquibaseMigration.sh prod
+  """
+}
+
+def deployerDeploy(name) {                
+                    ecrLogin()
+                    sh """
+                      docker run --rm ${deployerRepository} \
+                        ecs deploy ${name} ${name}-${appName}-worker -t ${getAppVersionWithBranchName()} --region eu-west-1 --timeout 1800
+                    """
+                    sh """
+                      docker run --rm ${deployerRepository} \
+                        ecs deploy ${name} ${name}-${appName} -t ${getAppVersionWithBranchName()} --region eu-west-1 --timeout 1800
+                    """
+}
+def deployerDeployRules(name) {                
+                    ecrLogin()                    
+                    sh """
+                      docker run --rm ${deployerRepository} \
+                        ecs deploy ${name} ${name}-${appName}-worker-rulesprocessing -t ${getAppVersionWithBranchName()} --region eu-west-1 --timeout 1800
+                    """                    
+}
+def deployerDeployCalcs(name) {                
+                    ecrLogin()                    
+                    sh """
+                      docker run --rm ${deployerRepository} \
+                        ecs deploy ${name} ${name}-${appName}-worker-calculations -t ${getAppVersionWithBranchName()} --region eu-west-1 --timeout 1800
+                    """
+}
+
+pipeline {
+  agent none
+  options {
+    disableConcurrentBuilds()
+    timeout(time: 12, unit: 'HOURS')
+    timestamps()
+    ansiColor('xterm')
+  }
+
+  parameters {
+    booleanParam(defaultValue: false, description: 'Wipe stage database?', name: 'wipeStageDatabase')
+  }
+
+  stages {
+    stage('Unit tests') {
+      when {       
+          branch 'development'    
+          beforeAgent true
+      }
+      agent {
+        label 'docker'
+      }
+      options {
+            timeout(time: 2, unit: 'HOURS')
+        }
+      steps {
+        sh "docker build -f Dockerfile.maven -t local/maven ."
+        sh "docker run --name maven local/maven mvn test"
+      }
+      post {
+        always {
+          sh "docker cp maven:/work/target highwire-unit-tests || exit 0"
+          sh "docker rm maven"
+          archiveArtifacts artifacts: 'highwire-unit-tests/**', fingerprint: false
+          junit 'highwire-unit-tests/surefire-reports/*.xml'
+        }
+        failure {
+          script {
+            if("${env.BRANCH_NAME}" == 'master' || "${env.BRANCH_NAME}" == 'development' || "${env.BRANCH_NAME}" == 'release') {
+              office365ConnectorSend message: "Unit Tests Failed! ${env.JOB_NAME} - ${env.BUILD_NUMBER}", status: "Failure", color: "d00000", webhookUrl: buildfailureWebhook
+            }
+          }
+        }
+      }
+    }
+    stage('Build Container') {
+      when {
+        anyOf {
+          branch 'master'
+          branch 'development'
+          branch 'release'
+        }
+        beforeAgent true
+      }
+      agent {
+        label 'docker'
+      }      
+      stages {
+        stage('Docker build') {
+          steps {
+            office365ConnectorSend message:"Build started ${env.JOB_NAME} - ${env.BUILD_NUMBER} (<${env.BUILD_URL}|Open>)", status: "Started", color: "999999", webhookUrl: devopsWebhook
+            sh "docker build . -t ${repository}:${getAppVersionWithBranchName()}"
+          }
+          post {
+            failure {
+              script {
+                if("${env.BRANCH_NAME}" == 'master' || "${env.BRANCH_NAME}" == 'development' || "${env.BRANCH_NAME}" == 'release') {
+                  office365ConnectorSend message: "Build Failed! ${env.JOB_NAME} - ${env.BUILD_NUMBER}", status: "Failure", color: "d00000", webhookUrl: buildfailureWebhook
+                }
+              }
+            }
+          }
+        }
+        stage('Docker push') {
+          steps {
+            ecrLogin()
+            sh "docker push ${repository}:${getAppVersionWithBranchName()}"
+          }
+        }
+      }
+    }
+    stage('Deploy to Stage') {
+      when {
+        branch 'development'
+        beforeAgent true
+      }
+      agent {
+        label 'docker'
+      }
+      stages {
+        stage('Build Migrations docker image') {
+          steps {
+            buildMigrationsdockerImage()
+          }
+        }
+        stage('Database Wipe') {
+          when {
+            expression { return params.wipeStageDatabase }
+            beforeAgent true
+          }
+          steps {
+            sh """
+              docker run --rm --entrypoint='' \
+                -w /work \
+                -v \$(pwd)/wipeStageDB.sh:/work/wipeStageDB.sh \
+                -e AWS_REGION='${region}' \
+                -e AWS_ENV_PATH='/mgmt/jenkins/${stageEnv}/${appName}/' \
+                  local/migrations \
+                    ./wipeStageDB.sh
+            """
+          }
+        }
+        stage('Liquibase migration') {
+          steps {
+            namedLiquibaseMigration('stage')
+          }
+          post {
+            always {
+              dir('migrations') {
+                archiveArtifacts artifacts: 'migration-plan.sql', fingerprint: false
+              }
+            }
+            failure {
+              script {
+                if("${env.BRANCH_NAME}" == 'development') {
+                  office365ConnectorSend message: "Liquibase Migration for ${stageEnv} Failed! ${env.JOB_NAME} - ${env.BUILD_NUMBER}", status: "Failure", color: "d00000", webhookUrl: buildfailureWebhook
+                }
+              }
+            }
+          }
+        }
+        stage('Deploy') {
+          steps {
+            deployerDeploy('stage')
+          }
+          post {
+            success {
+              office365ConnectorSend message: "Deployed Stage ${env.JOB_NAME} - ${env.BUILD_NUMBER} - ${getAppVersionWithBranchName()}", status: "Success", color: "50df16", webhookUrl: backendWebhook
+            }
+            
+          }
+        }
+      }
+    }     
+    stage ('RA Tests @long') {
+        when {
+            branch 'development'
+            beforeAgent true
+        }    
+        agent {
+            label 'docker'
+        }
+        options {
+            timeout(time: 2, unit: 'HOURS')
+        }
+        environment {
+            email = 'apitestingfa2022%2Bnosystemroles%40gmail.com' //urlencoded
+            auth = 'YWRtaW5AZnVuZHNheGlzLmNvbTphZG1pbg=='
+        }        
+        steps {
+            dir('src/test/highwire-api-tests') {
+              sh "docker build -t local/highwire-api-tests ."
+            }
+            sh "echo 'Url=${highwireUrl}' > src/test/highwire-api-tests/src/main/resources/config.properties"
+            sh """
+              docker run -d --name highwire-api-test-long \
+                -w /work/highwire-api-tests \
+                  local/highwire-api-tests \
+                    sleep infinity
+            """
+            sh "docker cp src/test/highwire-api-tests highwire-api-test-long:/work"
+            sh "mkdir -p src/test/highwire-api-tests/targetC"
+            sh "docker exec highwire-api-test-long ./sanitise.sh '${highwireUrl}' '${auth}' '${email}'"
+            sh """
+              docker exec highwire-api-test-long \
+                mvn test -Dcucumber.options='--tags @long --tags ~@ignore' > src/test/highwire-api-tests/targetC/api-test-logs.txt
+            """
+        }
+        post {
+            always {
+              sh "docker exec highwire-api-test-long mv target targetC"
+              sh "docker cp highwire-api-test-long:/work/highwire-api-tests/targetC src/test/highwire-api-tests || exit 0"
+              sh "docker rm -f highwire-api-test-long"
+              dir('src/test') {
+                sh "cat highwire-api-tests/targetC/surefire-reports/runners.RunTest.txt"
+                archiveArtifacts artifacts: 'highwire-api-tests/targetC/**', fingerprint: false
+                junit 'highwire-api-tests/targetC/surefire-reports/*.xml'
+              }
+            }
+            failure {
+                script {
+                    if("${env.BRANCH_NAME}" == 'development') {
+                        office365ConnectorSend message: "API Tests Failed! ${env.JOB_NAME} - ${env.BUILD_NUMBER}", status: "Failure", color: "d00000", webhookUrl: buildfailureWebhook
+                    }
+                }
+            }
+          }
+    }
+
+    stage ('~@long && ~@fileUpload') {
+        when {
+            branch 'development'
+            beforeAgent true
+        }
+        agent {
+            label 'docker'
+        }
+        options {
+            timeout(time: 3, unit: 'HOURS')
+        }
+        steps {
+            dir('src/test/highwire-api-tests') {
+              sh "docker build -t local/highwire-api-tests ."
+            }
+            sh "echo 'Url=${highwireUrl}' > src/test/highwire-api-tests/src/main/resources/config.properties"
+            sh """
+              docker run -d --name highwire-api-test-long-fileupload \
+                -w /work/highwire-api-tests \
+                  local/highwire-api-tests \
+                    sleep infinity
+            """
+            sh "docker cp src/test/highwire-api-tests highwire-api-test-long-fileupload:/work"
+            sh "mkdir -p src/test/highwire-api-tests/targetA"
+            sh """
+              docker exec highwire-api-test-long-fileupload \
+                    mvn test -Dcucumber.options='--tags ~@long --tags ~@fileUpload --tags ~@ignore' > src/test/highwire-api-tests/targetA/api-test-logs.txt
+            """
+        }
+        post {
+            always {
+              sh "docker exec highwire-api-test-long-fileupload mv target targetA"
+              sh "docker cp highwire-api-test-long-fileupload:/work/highwire-api-tests/targetA src/test/highwire-api-tests || exit 0"
+              sh "docker rm -f highwire-api-test-long-fileupload"
+              dir('src/test') {
+                sh "cat highwire-api-tests/targetA/surefire-reports/runners.RunTest.txt"
+                archiveArtifacts artifacts: 'highwire-api-tests/targetA/**', fingerprint: false
+                junit 'highwire-api-tests/targetA/surefire-reports/*.xml'
+              }
+            }
+            failure {
+                script {
+                    if("${env.BRANCH_NAME}" == 'development') {
+                        office365ConnectorSend message: "API Tests Failed! ${env.JOB_NAME} - ${env.BUILD_NUMBER}", status: "Failure", color: "d00000", webhookUrl: buildfailureWebhook
+                    }
+                }
+            }
+        }
+    }
+    stage ('@fileUpload') {
+        when {
+            branch 'development'
+            beforeAgent true
+        }
+        agent {
+            label 'docker'
+        }
+        options {
+            retry(2)
+            timeout(time: 6, unit: 'HOURS')
+        }
+        steps {
+            dir('src/test/highwire-api-tests') {
+              sh "docker build -t local/highwire-api-tests ."
+            }
+            sh "echo 'Url=${highwireUrl}' > src/test/highwire-api-tests/src/main/resources/config.properties"
+            sh """
+              docker run -d --name highwire-api-test-fileupload \
+                -w /work/highwire-api-tests \
+                  local/highwire-api-tests \
+                    sleep infinity
+            """
+            sh "docker cp src/test/highwire-api-tests highwire-api-test-fileupload:/work"
+            sh "mkdir -p src/test/highwire-api-tests/targetB"
+            sh """
+              docker exec highwire-api-test-fileupload \
+                mvn test -Dcucumber.options='--tags @fileUpload --tags ~@ignore' > src/test/highwire-api-tests/targetB/api-test-logs.txt || true
+            """
+        }
+        post {
+            always {
+              sh "docker exec highwire-api-test-fileupload mv target targetB"
+              sh "docker cp highwire-api-test-fileupload:/work/highwire-api-tests/targetB src/test/highwire-api-tests || exit 0"
+              sh "docker rm -f highwire-api-test-fileupload"
+              dir('src/test') {
+                sh "cat highwire-api-tests/targetB/surefire-reports/runners.RunTest.txt"
+                archiveArtifacts artifacts: 'highwire-api-tests/targetB/**', fingerprint: false
+                junit 'highwire-api-tests/targetB/surefire-reports/*.xml'
+                sh "grep -q 'Failures: 0, Errors: 0' highwire-api-tests/targetB/surefire-reports/runners.RunTest.txt"
+              }
+            }
+            failure {
+                script {
+                    if("${env.BRANCH_NAME}" == 'development') {
+                        office365ConnectorSend message: "API Tests Failed! ${env.JOB_NAME} - ${env.BUILD_NUMBER}", status: "Failure", color: "d00000", webhookUrl: buildfailureWebhook
+                    }
+                }
+            }
+        }
+    }   
+    stage('Stage: End to End Tests') {
+      when {
+        branch 'development'
+        beforeAgent true
+      }
+      agent none
+      options {
+            timeout(time: 3, unit: 'HOURS')
+        }
+      steps {
+        retry(2) {
+          build job: 'tests-e2e/development', propagate: true, wait: true
+        }
+      }
+      post {
+        failure {
+          script {
+            if("${env.BRANCH_NAME}" == 'development') {
+              office365ConnectorSend message: "E2E Tests Failed! ${env.JOB_NAME} - ${env.BUILD_NUMBER}", status: "Failure", color: "d00000", webhookUrl: buildfailureWebhook
+            }
+          }
+        }
+      }
+    }
+    stage('Deploy to Test') {
+      when {
+        branch 'release'
+        beforeAgent true
+      }
+      agent {
+        label 'docker'
+      }
+      stages {
+        stage('Build Migrations docker image') {
+          steps {
+            buildMigrationsdockerImage()
+          }
+        }
+        stage('Liquibase migration') {
+          steps {
+            namedLiquibaseMigration('test')
+          }
+          post {
+            always {
+              dir('migrations') {
+                archiveArtifacts artifacts: 'migration-plan.sql', fingerprint: false
+              }
+            }
+            failure {
+              script {
+                if("${env.BRANCH_NAME}" == 'release') {
+                  office365ConnectorSend message: "Liquibase Migration for ${testEnv} Failed! ${env.JOB_NAME} - ${env.BUILD_NUMBER}", status: "Failure", color: "d00000", webhookUrl: buildfailureWebhook
+                }
+              }
+            }
+          }
+        }
+        stage('Deploy') {
+          steps {
+            deployerDeploy('test')
+          }
+          post {
+            success {
+              office365ConnectorSend message: "Deployed Test ${env.JOB_NAME} - ${env.BUILD_NUMBER} - ${getAppVersionWithBranchName()}", status: "Success", color: "50df16", webhookUrl: backendWebhook
+            }
+           
+          }
+        }
+        stage('DeployRules') {
+          steps {
+              deployerDeployRules('test')                                      
+          }
+          post {
+              success {
+                  office365ConnectorSend message: "Deployed Test Rules worker ${env.JOB_NAME} - ${env.BUILD_NUMBER} - ${getAppVersion()}", status: "Success", color: "50df16", webhookUrl: backendWebhook
+              }                    
+          }
+      }
+        stage('DeployCalcs') {
+          steps {
+              deployerDeployCalcs('test')                                      
+          }
+          post {
+              success {
+                  office365ConnectorSend message: "Deployed Test Calcs Worker ${env.JOB_NAME} - ${env.BUILD_NUMBER} - ${getAppVersion()}", status: "Success", color: "50df16", webhookUrl: backendWebhook
+              }                    
+          }
+        }
+      }
+    }
+    stage("Get Approval for Internal Envs Deployment") {  
+            when {
+                branch 'master'
+            }          
+            steps {
+                office365ConnectorSend message: "Please Approve to Deploy in Internal Envs!! - ${env.JOB_NAME} - ${env.BUILD_NUMBER}", status: "Approval_Pending", color: "50df16", webhookUrl: approvalrequestWebhook
+                input "Please Approve to Proceed with Deployment"
+            }
+            post {
+            success {
+              office365ConnectorSend message: "Got Approval for Deployment!! - ${env.JOB_NAME} - ${env.BUILD_NUMBER}", status: "Success", color: "50df16", webhookUrl: approvalrequestWebhook
+            }            
+          }
+    }
+    stage('Deploy to Internal Envs') {
+      when {
+           branch 'master'
+           beforeAgent true
+         }      
+    stages {  
+     stage('Deployment in Parallel') {
+      parallel {
+        stage('Transition') {         
+          agent {
+            label 'docker'
+          }        
+          stages {
+            stage('Build Migrations docker image') {
+              steps {
+                buildMigrationsdockerImage()
+              }
+            }
+
+            stage('Liquibase migration') {
+              steps {
+                liquibaseMigration('transition')
+                }
+              post {
+                always {
+                  dir('migrations') {
+                    archiveArtifacts artifacts: 'migration-plan.sql', fingerprint: false
+                  }
+                }
+                failure {
+                    script {
+                        if("${env.BRANCH_NAME}" == 'master') {
+                          office365ConnectorSend message: "Liquibase Migration for ${transitionEnv} Failed! ${env.JOB_NAME} - ${env.BUILD_NUMBER}", status: "Failure", color: "d00000", webhookUrl: buildfailureWebhook
+                        }
+                    }
+                }
+              }
+            }
+            stage('Deploy') {
+                steps {
+                    deployerDeploy('transition')
+                }
+                post {
+                    success {
+                        office365ConnectorSend message: "Deployed Transition ${env.JOB_NAME} - ${env.BUILD_NUMBER} - ${getAppVersionWithBranchName()}", status: "Success", color: "50df16", webhookUrl: backendWebhook
+                    }                    
+                }
+            }          
+          }  
+        }
+        stage('Demo') {
+          agent {
+           label 'docker'
+          }      
+          stages {
+            stage('Build Migrations docker image') {
+              steps {
+                buildMigrationsdockerImage()
+              }
+            }
+            stage('Liquibase migration') {
+              steps {
+                liquibaseMigration('demo')
+                
+                }
+              post {
+                always {
+                  dir('migrations') {
+                    archiveArtifacts artifacts: 'migration-plan.sql', fingerprint: false
+                  }
+                }
+                failure {
+                    script {
+                        if("${env.BRANCH_NAME}" == 'master') {
+                          office365ConnectorSend message: "Liquibase Migration for ${demoEnv} Failed! ${env.JOB_NAME} - ${env.BUILD_NUMBER}", status: "Failure", color: "d00000", webhookUrl: buildfailureWebhook
+                        }
+                    }
+                }
+              }
+            }
+            stage('Deploy') {
+                steps {
+                    deployerDeploy('demo')
+                }
+                post {
+                    success {
+                        office365ConnectorSend message: "Deployed Demo ${env.JOB_NAME} - ${env.BUILD_NUMBER} - ${getAppVersionWithBranchName()}", status: "Success", color: "50df16", webhookUrl: backendWebhook
+                    }                    
+                }
+              }
+              stage('DeployRules') {
+                steps {
+                    deployerDeployRules('demo')
+                }
+                post {
+                    success {
+                        office365ConnectorSend message: "Deployed Demo Rules Worker${env.JOB_NAME} - ${env.BUILD_NUMBER} - ${getAppVersionWithBranchName()}", status: "Success", color: "50df16", webhookUrl: backendWebhook
+                    }                    
+                }
+              }
+              stage('DeployCalcs') {
+                steps {
+                    deployerDeployCalcs('demo')
+                }
+                post {
+                    success {
+                        office365ConnectorSend message: "Deployed Demo Calcs Worker ${env.JOB_NAME} - ${env.BUILD_NUMBER} - ${getAppVersionWithBranchName()}", status: "Success", color: "50df16", webhookUrl: backendWebhook
+                    }                    
+                }
+              }         
+            }  
+        }
+        }
+      }
+    }
+  }   
+    
+    stage("Get Approval") {  
+            when {
+                branch 'master'
+            }          
+            steps {
+                office365ConnectorSend message: "Please Approve to Deploy in Production!! - ${env.JOB_NAME} - ${env.BUILD_NUMBER}", status: "Approval_Pending", color: "50df16", webhookUrl: approvalrequestWebhook
+                input "Please Approve to Proceed with Deployment"
+            }
+            post {
+            success {
+              office365ConnectorSend message: "Got Approval for Deployment!! - ${env.JOB_NAME} - ${env.BUILD_NUMBER}", status: "Success", color: "50df16", webhookUrl: approvalrequestWebhook
+            }            
+          }
+    }
+   //batch-1         
+    stage('Deploy to Production-1') {
+      when {
+           branch 'master'
+           beforeAgent true
+         }      
+    stages {  
+     stage('Deployment in Parallel') {
+      parallel {        
+
+        stage('Prod-v2') {
+          agent {
+           label 'docker'
+          }            
+          stages {
+            stage('Build Migrations docker image') {
+                steps {
+                    buildMigrationsdockerImage()
+                }
+              }
+            stage('Liquibase migration') {
+                steps {
+                  liquibaseMigration('prod-v2')
+
+                    }
+                post {
+                    always {
+                        dir('migrations') {
+                            archiveArtifacts artifacts: 'migration-plan.sql', fingerprint: false
+                        }
+                    }
+                    failure {
+                        script {
+                            if("${env.BRANCH_NAME}" == 'master') {
+                                office365ConnectorSend message: "Liquibase Migration for ${prodv2Env} Failed! ${env.JOB_NAME} - ${env.BUILD_NUMBER}", status: "Failure", color: "d00000", webhookUrl: buildfailureWebhook
+                            }
+                        }
+                    }
+                }
+            }
+            stage('Deploy') {
+                steps {
+                    ecrLogin()
+                    sh """
+                        docker run --rm ${deployerRepository} \
+                            ecs deploy ${prodv2Cluster} ${prodv2Env}-${appName}-worker -t ${getAppVersionWithBranchName()} --region eu-west-1 --timeout 1800
+                    """
+                    sh """
+                        docker run --rm ${deployerRepository} \
+                            ecs deploy ${prodv2Cluster} ${prodv2Env}-${appName} -t ${getAppVersionWithBranchName()} --region eu-west-1 --timeout 1800
+                    """
+                }
+                post {
+                  success {
+                    office365ConnectorSend message: "Deployed Prod v2 ${env.JOB_NAME} - ${env.BUILD_NUMBER} - ${getAppVersionWithBranchName()}", status: "Success", color: "50df16", webhookUrl: backendWebhook
+                  }                 
+                }
+            }
+          }  
+        }        
+        stage('Equitytrustees') {
+          agent {
+           label 'docker'
+          }       
+          stages {
+            stage('Build Migrations docker image') {
+              steps {
+                buildMigrationsdockerImage()
+              }
+            }
+            stage('Liquibase migration') {
+              steps {
+                liquibaseMigration('equitytrustees')
+                
+                }
+              post {
+                always {
+                  dir('migrations') {
+                    archiveArtifacts artifacts: 'migration-plan.sql', fingerprint: false
+                  }
+                }
+                failure {
+                    script {
+                        if("${env.BRANCH_NAME}" == 'master') {
+                          office365ConnectorSend message: "Liquibase Migration for ${equitytrusteesEnv} Failed! ${env.JOB_NAME} - ${env.BUILD_NUMBER}", status: "Failure", color: "d00000", webhookUrl: buildfailureWebhook
+                        }
+                    }
+                }
+              }
+            }
+            stage('Deploy') {
+                steps {
+                    deployerDeploy('equitytrustees')                                      
+                }
+                post {
+                    success {
+                        office365ConnectorSend message: "Deployed Equitytrustees ${env.JOB_NAME} - ${env.BUILD_NUMBER} - ${getAppVersionWithBranchName()}", status: "Success", color: "50df16", webhookUrl: backendWebhook
+                    }                    
+                }
+            }
+            stage('DeployRules') {
+                steps {
+                    deployerDeployRules('equitytrustees')                                      
+                }
+                post {
+                    success {
+                        office365ConnectorSend message: "Deployed Equitytrustees Rules worker ${env.JOB_NAME} - ${env.BUILD_NUMBER} - ${getAppVersionWithBranchName()}", status: "Success", color: "50df16", webhookUrl: backendWebhook
+                    }                    
+                }
+            }
+            stage('DeployCalcs') {
+                steps {
+                    deployerDeployCalcs('equitytrustees')                                      
+                }
+                post {
+                    success {
+                        office365ConnectorSend message: "Deployed Equitytrustees Calcs Worker ${env.JOB_NAME} - ${env.BUILD_NUMBER} - ${getAppVersionWithBranchName()}", status: "Success", color: "50df16", webhookUrl: backendWebhook
+                    }                    
+                }
+            }           
+          }  
+        } 
+        stage('Intertrust') {
+          agent {
+           label 'docker'
+          }     
+          stages {
+            stage('Build Migrations docker image') {
+              steps {
+                buildMigrationsdockerImage()
+              }
+            }
+            stage('Liquibase migration') {
+              steps {
+                liquibaseMigration('intertrust')
+                
+                }
+              post {
+                always {
+                  dir('migrations') {
+                    archiveArtifacts artifacts: 'migration-plan.sql', fingerprint: false
+                  }
+                }
+                failure {
+                    script {
+                        if("${env.BRANCH_NAME}" == 'master') {
+                          office365ConnectorSend message: "Liquibase Migration for ${intertrustEnv} Failed! ${env.JOB_NAME} - ${env.BUILD_NUMBER}", status: "Failure", color: "d00000", webhookUrl: buildfailureWebhook
+                        }
+                    }
+                }
+              }
+            }
+            stage('Deploy') {
+                steps {
+                    deployerDeploy('intertrust')
+                }
+                post {
+                    success {
+                        office365ConnectorSend message: "Deployed Intertrust ${env.JOB_NAME} - ${env.BUILD_NUMBER} - ${getAppVersionWithBranchName()}", status: "Success", color: "50df16", webhookUrl: backendWebhook
+                    }                    
+                }
+            }
+            stage('DeployRules') {
+                steps {
+                    deployerDeployRules('intertrust')
+                }
+                post {
+                    success {
+                        office365ConnectorSend message: "Deployed Intertrust Rules Worker ${env.JOB_NAME} - ${env.BUILD_NUMBER} - ${getAppVersionWithBranchName()}", status: "Success", color: "50df16", webhookUrl: backendWebhook
+                    }                    
+                }
+            }
+            stage('DeployCalcs') {
+                steps {
+                    deployerDeployCalcs('intertrust')
+                }
+                post {
+                    success {
+                        office365ConnectorSend message: "Deployed Intertrust Calcs Worker ${env.JOB_NAME} - ${env.BUILD_NUMBER} - ${getAppVersionWithBranchName()}", status: "Success", color: "50df16", webhookUrl: backendWebhook
+                    }                    
+                }
+            }          
+          }  
+        }
+        stage('Way') {
+          agent {
+           label 'docker'
+          }      
+          stages {
+            stage('Build Migrations docker image') {
+              steps {
+                buildMigrationsdockerImage()
+              }
+            }
+            stage('Liquibase migration') {
+              steps {
+                liquibaseMigration('way')
+                
+                }
+              post {
+                always {
+                  dir('migrations') {
+                    archiveArtifacts artifacts: 'migration-plan.sql', fingerprint: false
+                  }
+                }
+                failure {
+                    script {
+                        if("${env.BRANCH_NAME}" == 'master') {
+                          office365ConnectorSend message: "Liquibase Migration for ${wayEnv} Failed! ${env.JOB_NAME} - ${env.BUILD_NUMBER}", status: "Failure", color: "d00000", webhookUrl: buildfailureWebhook
+                        }
+                    }
+                }
+              }
+            }
+            stage('Deploy') {
+                steps {
+                    deployerDeploy('way')
+                }
+                post {
+                    success {
+                        office365ConnectorSend message: "Deployed Way ${env.JOB_NAME} - ${env.BUILD_NUMBER} - ${getAppVersionWithBranchName()}", status: "Success", color: "50df16", webhookUrl: backendWebhook
+                    }                    
+                }
+            }
+            stage('DeployRules') {
+                steps {
+                    deployerDeployRules('way')
+                }
+                post {
+                    success {
+                        office365ConnectorSend message: "Deployed Way Rules Worker ${env.JOB_NAME} - ${env.BUILD_NUMBER} - ${getAppVersionWithBranchName()}", status: "Success", color: "50df16", webhookUrl: backendWebhook
+                    }                    
+                }
+            }
+            stage('DeployCalcs') {
+                steps {
+                    deployerDeployCalcs('way')
+                }
+                post {
+                    success {
+                        office365ConnectorSend message: "Deployed Way Calcs Worker ${env.JOB_NAME} - ${env.BUILD_NUMBER} - ${getAppVersionWithBranchName()}", status: "Success", color: "50df16", webhookUrl: backendWebhook
+                    }                    
+                }
+            }         
+          }  
+        }
+
+        }
+      }
+    }
+  }
+  stage("Get Approval for Batch-2 Deployment") {  
+            when {
+                branch 'master'
+            }          
+            steps {
+                office365ConnectorSend message: "Please Approve to Deploy in Production!! - ${env.JOB_NAME} - ${env.BUILD_NUMBER}", status: "Approval_Pending", color: "50df16", webhookUrl: approvalrequestWebhook
+                input "Please Approve to Proceed with Deployment"
+            }
+            post {
+            success {
+              office365ConnectorSend message: "Got Approval for Deployment!! - ${env.JOB_NAME} - ${env.BUILD_NUMBER}", status: "Success", color: "50df16", webhookUrl: approvalrequestWebhook
+            }            
+          }
+    } 
+//batch-2
+    stage('Deploy to Production-2') {
+      when {
+           branch 'master'
+           beforeAgent true
+         }
+    stages {  
+     stage('Deployment in Parallel') {      
+      parallel {
+
+        stage('Thesis') {
+          agent {
+           label 'docker'
+          }      
+          stages {
+            stage('Build Migrations docker image') {
+              steps {
+                buildMigrationsdockerImage()
+              }
+            }
+            stage('Liquibase migration') {
+              steps {
+                liquibaseMigration('thesis')
+                
+                }
+              post {
+                always {
+                  dir('migrations') {
+                    archiveArtifacts artifacts: 'migration-plan.sql', fingerprint: false
+                  }
+                }
+                failure {
+                    script {
+                        if("${env.BRANCH_NAME}" == 'master') {
+                          office365ConnectorSend message: "Liquibase Migration for ${thesisEnv} Failed! ${env.JOB_NAME} - ${env.BUILD_NUMBER}", status: "Failure", color: "d00000", webhookUrl: buildfailureWebhook
+                        }
+                    }
+                }
+              }
+            }
+            stage('Deploy') {
+                steps {
+                    deployerDeploy('thesis')                    
+                }
+                post {
+                    success {
+                        office365ConnectorSend message: "Deployed Thesis ${env.JOB_NAME} - ${env.BUILD_NUMBER} - ${getAppVersionWithBranchName()}", status: "Success", color: "50df16", webhookUrl: backendWebhook
+                    }                    
+                }
+            }
+            stage('DeployRules') {
+                steps {
+                    deployerDeployRules('thesis')                    
+                }
+                post {
+                    success {
+                        office365ConnectorSend message: "Deployed Thesis Rules Worker${env.JOB_NAME} - ${env.BUILD_NUMBER} - ${getAppVersionWithBranchName()}", status: "Success", color: "50df16", webhookUrl: backendWebhook
+                    }                    
+                }
+            }
+            stage('DeployCalcs') {
+                steps {
+                    deployerDeployCalcs('thesis')                    
+                }
+                post {
+                    success {
+                        office365ConnectorSend message: "Deployed Thesis Calcs Worker ${env.JOB_NAME} - ${env.BUILD_NUMBER} - ${getAppVersionWithBranchName()}", status: "Success", color: "50df16", webhookUrl: backendWebhook
+                    }                    
+                }
+            }          
+          }  
+        }
+        stage('Maitland') {
+          agent {
+           label 'docker'
+          }      
+          stages {
+            stage('Build Migrations docker image') {
+              steps {
+                buildMigrationsdockerImage()
+              }
+            }
+            stage('Liquibase migration') {
+              steps {
+                liquibaseMigration('maitland')
+                
+                }
+              post {
+                always {
+                  dir('migrations') {
+                    archiveArtifacts artifacts: 'migration-plan.sql', fingerprint: false
+                  }
+                }
+                failure {
+                    script {
+                        if("${env.BRANCH_NAME}" == 'master') {
+                          office365ConnectorSend message: "Liquibase Migration for ${maitlandEnv} Failed! ${env.JOB_NAME} - ${env.BUILD_NUMBER}", status: "Failure", color: "d00000", webhookUrl: buildfailureWebhook
+                        }
+                    }
+                }
+              }
+            }
+            stage('Deploy') {
+                steps {
+                    deployerDeploy('maitland')                    
+                }
+                post {
+                    success {
+                        office365ConnectorSend message: "Deployed Maitland ${env.JOB_NAME} - ${env.BUILD_NUMBER} - ${getAppVersionWithBranchName()}", status: "Success", color: "50df16", webhookUrl: backendWebhook
+                    }                    
+                }
+            }
+            stage('DeployRules') {
+                steps {
+                    deployerDeployRules('maitland')                    
+                }
+                post {
+                    success {
+                        office365ConnectorSend message: "Deployed Maitland Rules Worker ${env.JOB_NAME} - ${env.BUILD_NUMBER} - ${getAppVersionWithBranchName()}", status: "Success", color: "50df16", webhookUrl: backendWebhook
+                    }                    
+                }
+            }
+            stage('DeployCalcs') {
+                steps {
+                    deployerDeployCalcs('maitland')                    
+                }
+                post {
+                    success {
+                        office365ConnectorSend message: "Deployed Maitland Calcs Worker ${env.JOB_NAME} - ${env.BUILD_NUMBER} - ${getAppVersionWithBranchName()}", status: "Success", color: "50df16", webhookUrl: backendWebhook
+                    }                    
+                }
+            }          
+          }  
+        }
+        
+        stage('Yealand') {
+          agent {
+           label 'docker'
+          }      
+          stages {
+            stage('Build Migrations docker image') {
+              steps {
+                buildMigrationsdockerImage()
+              }
+            }
+            stage('Liquibase migration') {
+              steps {
+                liquibaseMigration('yealand')
+                
+                }
+              post {
+                always {
+                  dir('migrations') {
+                    archiveArtifacts artifacts: 'migration-plan.sql', fingerprint: false
+                  }
+                }
+                failure {
+                    script {
+                        if("${env.BRANCH_NAME}" == 'master') {
+                          office365ConnectorSend message: "Liquibase Migration for ${yealandEnv} Failed! ${env.JOB_NAME} - ${env.BUILD_NUMBER}", status: "Failure", color: "d00000", webhookUrl: buildfailureWebhook
+                        }
+                    }
+                }
+              }
+            }
+            stage('Deploy') {
+                steps {
+                    deployerDeploy('yealand')                    
+                }
+                post {
+                    success {
+                        office365ConnectorSend message: "Deployed Yealand ${env.JOB_NAME} - ${env.BUILD_NUMBER} - ${getAppVersionWithBranchName()}", status: "Success", color: "50df16", webhookUrl: backendWebhook
+                    }                    
+                }
+            }
+            stage('DeployRules') {
+                steps {
+                    deployerDeployRules('yealand')                    
+                }
+                post {
+                    success {
+                        office365ConnectorSend message: "Deployed Yealand Rules Worker ${env.JOB_NAME} - ${env.BUILD_NUMBER} - ${getAppVersionWithBranchName()}", status: "Success", color: "50df16", webhookUrl: backendWebhook
+                    }                    
+                }
+            }
+            stage('DeployCalcs') {
+                steps {
+                    deployerDeployCalcs('yealand')                    
+                }
+                post {
+                    success {
+                        office365ConnectorSend message: "Deployed Yealand Calcs Worker ${env.JOB_NAME} - ${env.BUILD_NUMBER} - ${getAppVersionWithBranchName()}", status: "Success", color: "50df16", webhookUrl: backendWebhook
+                    }                    
+                }
+            }          
+          }  
+        }                
+        stage('Phoenix') {
+          agent {
+           label 'docker'
+          }      
+          stages {
+            stage('Build Migrations docker image') {
+              steps {
+                buildMigrationsdockerImage()
+              }
+            }
+            stage('Liquibase migration') {
+              steps {
+                liquibaseMigration('phoenix')
+                
+                }
+              post {
+                always {
+                  dir('migrations') {
+                    archiveArtifacts artifacts: 'migration-plan.sql', fingerprint: false
+                  }
+                }
+                failure {
+                    script {
+                        if("${env.BRANCH_NAME}" == 'master') {
+                          office365ConnectorSend message: "Liquibase Migration for ${phoenixEnv} Failed! ${env.JOB_NAME} - ${env.BUILD_NUMBER}", status: "Failure", color: "d00000", webhookUrl: buildfailureWebhook
+                        }
+                    }
+                }
+              }
+            }
+            stage('Deploy') {
+                steps {
+                    deployerDeploy('phoenix')
+                }
+                post {
+                    success {
+                        office365ConnectorSend message: "Deployed Phoenix ${env.JOB_NAME} - ${env.BUILD_NUMBER} - ${getAppVersionWithBranchName()}", status: "Success", color: "50df16", webhookUrl: backendWebhook
+                    }                    
+                }
+              }
+              stage('DeployRules') {
+                steps {
+                    deployerDeployRules('phoenix')
+                }
+                post {
+                    success {
+                        office365ConnectorSend message: "Deployed Phoenix Rules Worker${env.JOB_NAME} - ${env.BUILD_NUMBER} - ${getAppVersionWithBranchName()}", status: "Success", color: "50df16", webhookUrl: backendWebhook
+                    }                    
+                }
+              }
+              stage('DeployCalcs') {
+                steps {
+                    deployerDeployCalcs('phoenix')
+                }
+                post {
+                    success {
+                        office365ConnectorSend message: "Deployed Phoenix Calcs Worker ${env.JOB_NAME} - ${env.BUILD_NUMBER} - ${getAppVersionWithBranchName()}", status: "Success", color: "50df16", webhookUrl: backendWebhook
+                    }                    
+                }
+              }         
+            }  
+        }
+      }
+     }
+    }
+    }
+    stage("Get Approval for Batch-3 Deployment") {  
+            when {
+                branch 'master'
+            }          
+            steps {
+                office365ConnectorSend message: "Please Approve to Deploy in Production!! - ${env.JOB_NAME} - ${env.BUILD_NUMBER}", status: "Approval_Pending", color: "50df16", webhookUrl: approvalrequestWebhook
+                input "Please Approve to Proceed with Deployment"
+            }
+            post {
+            success {
+              office365ConnectorSend message: "Got Approval for Deployment!! - ${env.JOB_NAME} - ${env.BUILD_NUMBER}", status: "Success", color: "50df16", webhookUrl: approvalrequestWebhook
+            }            
+          }
+    } 
+//batch-3
+    stage('Deploy to Production-3') {
+      when {
+           branch 'master'
+           beforeAgent true
+         }
+    stages {  
+     stage('Deployment in Parallel') {      
+      parallel {
+
+        stage('Handelsbanken') {
+          agent {
+           label 'docker'
+          }      
+          stages {
+            stage('Build Migrations docker image') {
+              steps {
+                buildMigrationsdockerImage()
+              }
+            }
+            stage('Liquibase migration') {
+              steps {
+                liquibaseMigration('handelsbanken')
+                
+                }
+              post {
+                always {
+                  dir('migrations') {
+                    archiveArtifacts artifacts: 'migration-plan.sql', fingerprint: false
+                  }
+                }
+                failure {
+                    script {
+                        if("${env.BRANCH_NAME}" == 'master') {
+                          office365ConnectorSend message: "Liquibase Migration for ${handelsbankenEnv} Failed! ${env.JOB_NAME} - ${env.BUILD_NUMBER}", status: "Failure", color: "d00000", webhookUrl: buildfailureWebhook
+                        }
+                    }
+                }
+              }
+            }
+            stage('Deploy') {
+                steps {
+                    deployerDeploy('handelsbanken')
+                }
+                post {
+                    success {
+                        office365ConnectorSend message: "Deployed Handelsbanken ${env.JOB_NAME} - ${env.BUILD_NUMBER} - ${getAppVersionWithBranchName()}", status: "Success", color: "50df16", webhookUrl: backendWebhook
+                    }                    
+                }
+            }
+            stage('DeployRules') {
+                steps {
+                    deployerDeployRules('handelsbanken')
+                }
+                post {
+                    success {
+                        office365ConnectorSend message: "Deployed Handelsbanken Rules Worker${env.JOB_NAME} - ${env.BUILD_NUMBER} - ${getAppVersionWithBranchName()}", status: "Success", color: "50df16", webhookUrl: backendWebhook
+                    }                    
+                }
+            }
+            stage('DeployCalcs') {
+                steps {
+                    deployerDeployCalcs('handelsbanken')
+                }
+                post {
+                    success {
+                        office365ConnectorSend message: "Deployed Handelsbanken Calcs Worker ${env.JOB_NAME} - ${env.BUILD_NUMBER} - ${getAppVersionWithBranchName()}", status: "Success", color: "50df16", webhookUrl: backendWebhook
+                    }                    
+                }
+            }          
+          }  
+        }
+        stage('Marlborough') {
+          agent {
+           label 'docker'
+          }      
+          stages {
+            stage('Build Migrations docker image') {
+              steps {
+                buildMigrationsdockerImage()
+              }
+            }
+            stage('Liquibase migration') {
+              steps {
+                liquibaseMigration('marlborough')
+                
+                }
+              post {
+                always {
+                  dir('migrations') {
+                    archiveArtifacts artifacts: 'migration-plan.sql', fingerprint: false
+                  }
+                }
+                failure {
+                    script {
+                        if("${env.BRANCH_NAME}" == 'master') {
+                          office365ConnectorSend message: "Liquibase Migration for ${marlboroughEnv} Failed! ${env.JOB_NAME} - ${env.BUILD_NUMBER}", status: "Failure", color: "d00000", webhookUrl: buildfailureWebhook
+                        }
+                    }
+                }
+              }
+            }
+            stage('Deploy') {
+                steps {
+                    deployerDeploy('marlborough')
+                }
+                post {
+                    success {
+                        office365ConnectorSend message: "Deployed Marlborough ${env.JOB_NAME} - ${env.BUILD_NUMBER} - ${getAppVersionWithBranchName()}", status: "Success", color: "50df16", webhookUrl: backendWebhook
+                    }                    
+                }
+            }
+            stage('DeployRules') {
+                steps {
+                    deployerDeployRules('marlborough')
+                }
+                post {
+                    success {
+                        office365ConnectorSend message: "Deployed Marlborough Rules Worker ${env.JOB_NAME} - ${env.BUILD_NUMBER} - ${getAppVersionWithBranchName()}", status: "Success", color: "50df16", webhookUrl: backendWebhook
+                    }                    
+                }
+            }
+            stage('DeployCalcs') {
+                steps {
+                    deployerDeployCalcs('marlborough')
+                }
+                post {
+                    success {
+                        office365ConnectorSend message: "Deployed Marlborough Calcs Worker ${env.JOB_NAME} - ${env.BUILD_NUMBER} - ${getAppVersionWithBranchName()}", status: "Success", color: "50df16", webhookUrl: backendWebhook
+                    }                    
+                }
+            }          
+          }  
+        }
+        stage('Canaccord') {
+          agent {
+           label 'docker'
+          }      
+          stages {
+            stage('Build Migrations docker image') {
+              steps {
+                buildMigrationsdockerImage()
+              }
+            }
+            stage('Liquibase migration') {
+              steps {
+                liquibaseMigration('canaccord')
+                
+                }
+              post {
+                always {
+                  dir('migrations') {
+                    archiveArtifacts artifacts: 'migration-plan.sql', fingerprint: false
+                  }
+                }
+                failure {
+                    script {
+                        if("${env.BRANCH_NAME}" == 'master') {
+                          office365ConnectorSend message: "Liquibase Migration for ${canaccordEnv} Failed! ${env.JOB_NAME} - ${env.BUILD_NUMBER}", status: "Failure", color: "d00000", webhookUrl: buildfailureWebhook
+                        }
+                    }
+                }
+              }
+            }
+            stage('Deploy') {
+                steps {
+                    deployerDeploy('canaccord')
+                }
+                post {
+                    success {
+                        office365ConnectorSend message: "Deployed Canaccord ${env.JOB_NAME} - ${env.BUILD_NUMBER} - ${getAppVersionWithBranchName()}", status: "Success", color: "50df16", webhookUrl: backendWebhook
+                    }                    
+                }
+              }
+            stage('DeployRules') {
+                steps {
+                    deployerDeployRules('canaccord')
+                }
+                post {
+                    success {
+                        office365ConnectorSend message: "Deployed Canaccord Rules Worker ${env.JOB_NAME} - ${env.BUILD_NUMBER} - ${getAppVersionWithBranchName()}", status: "Success", color: "50df16", webhookUrl: backendWebhook
+                    }                    
+                }
+              }
+            stage('DeployCalcs') {
+                steps {
+                    deployerDeployCalcs('canaccord')
+                }
+                post {
+                    success {
+                        office365ConnectorSend message: "Deployed Canaccord Calcs Worker ${env.JOB_NAME} - ${env.BUILD_NUMBER} - ${getAppVersionWithBranchName()}", status: "Success", color: "50df16", webhookUrl: backendWebhook
+                    }                    
+                }
+              }             
+          }  
+        }
+        stage('Tbailey') {
+          agent {
+           label 'docker'
+          }      
+          stages {
+            stage('Build Migrations docker image') {
+              steps {
+                buildMigrationsdockerImage()
+              }
+            }
+            stage('Liquibase migration') {
+              steps {
+                liquibaseMigration('tbailey')
+                
+                }
+              post {
+                always {
+                  dir('migrations') {
+                    archiveArtifacts artifacts: 'migration-plan.sql', fingerprint: false
+                  }
+                }
+                failure {
+                    script {
+                        if("${env.BRANCH_NAME}" == 'master') {
+                          office365ConnectorSend message: "Liquibase Migration for ${tbaileyEnv} Failed! ${env.JOB_NAME} - ${env.BUILD_NUMBER}", status: "Failure", color: "d00000", webhookUrl: buildfailureWebhook
+                        }
+                    }
+                }
+              }
+            }
+            stage('Deploy') {
+                steps {
+                    deployerDeploy('tbailey')
+                }
+                post {
+                    success {
+                        office365ConnectorSend message: "Deployed Tbailey ${env.JOB_NAME} - ${env.BUILD_NUMBER} - ${getAppVersionWithBranchName()}", status: "Success", color: "50df16", webhookUrl: backendWebhook
+                    }                    
+                }
+              }
+            stage('DeployRules') {
+                steps {
+                    deployerDeployRules('tbailey')
+                }
+                post {
+                    success {
+                        office365ConnectorSend message: "Deployed Tbailey Rules Worker ${env.JOB_NAME} - ${env.BUILD_NUMBER} - ${getAppVersionWithBranchName()}", status: "Success", color: "50df16", webhookUrl: backendWebhook
+                    }                    
+                }
+              }
+            stage('DeployCalcs') {
+                steps {
+                    deployerDeployCalcs('tbailey')
+                }
+                post {
+                    success {
+                        office365ConnectorSend message: "Deployed Tbailey Calcs Worker ${env.JOB_NAME} - ${env.BUILD_NUMBER} - ${getAppVersionWithBranchName()}", status: "Success", color: "50df16", webhookUrl: backendWebhook
+                    }                    
+                }
+              }             
+            }  
+          }
+          
+      }
+     }
+    }
+    }
+
+    stage("Get Approval for Batch-4 Deployment") {  
+            when {
+                branch 'master'
+            }          
+            steps {
+                office365ConnectorSend message: "Please Approve to Deploy in Production!! - ${env.JOB_NAME} - ${env.BUILD_NUMBER}", status: "Approval_Pending", color: "50df16", webhookUrl: approvalrequestWebhook
+                input "Please Approve to Proceed with Deployment"
+            }
+            post {
+            success {
+              office365ConnectorSend message: "Got Approval for Deployment!! - ${env.JOB_NAME} - ${env.BUILD_NUMBER}", status: "Success", color: "50df16", webhookUrl: approvalrequestWebhook
+            }            
+          }
+    }
+//batch-4  
+    stage('Deploy to Production-4') {
+      when {
+           branch 'master'
+           beforeAgent true
+         }
+    stages {  
+     stage('Deployment in Parallel') {      
+      parallel {
+        stage('Caceis') {
+          agent {
+           label 'docker'
+          }      
+          stages {
+            stage('Build Migrations docker image') {
+              steps {
+                buildMigrationsdockerImage()
+              }
+            }
+            stage('Liquibase migration') {
+              steps {
+                liquibaseMigration('caceis')
+                
+                }
+              post {
+                always {
+                  dir('migrations') {
+                    archiveArtifacts artifacts: 'migration-plan.sql', fingerprint: false
+                  }
+                }
+                failure {
+                    script {
+                        if("${env.BRANCH_NAME}" == 'master') {
+                          office365ConnectorSend message: "Liquibase Migration for ${caceisEnv} Failed! ${env.JOB_NAME} - ${env.BUILD_NUMBER}", status: "Failure", color: "d00000", webhookUrl: buildfailureWebhook
+                        }
+                    }
+                }
+              }
+            }
+            stage('Deploy') {
+                steps {
+                    deployerDeploy('caceis')
+                }
+                post {
+                    success {
+                        office365ConnectorSend message: "Deployed Caceis ${env.JOB_NAME} - ${env.BUILD_NUMBER} - ${getAppVersionWithBranchName()}", status: "Success", color: "50df16", webhookUrl: backendWebhook
+                    }                    
+                }
+            }
+            stage('DeployRules') {
+                steps {
+                    deployerDeployRules('caceis')
+                }
+                post {
+                    success {
+                        office365ConnectorSend message: "Deployed Caceis Rules Worker ${env.JOB_NAME} - ${env.BUILD_NUMBER} - ${getAppVersionWithBranchName()}", status: "Success", color: "50df16", webhookUrl: backendWebhook
+                    }                    
+                }
+            }
+            stage('DeployCalcs') {
+                steps {
+                    deployerDeployCalcs('caceis')
+                }
+                post {
+                    success {
+                        office365ConnectorSend message: "Deployed Caceis calcs Worker ${env.JOB_NAME} - ${env.BUILD_NUMBER} - ${getAppVersionWithBranchName()}", status: "Success", color: "50df16", webhookUrl: backendWebhook
+                    }                    
+                }
+            }          
+          }  
+        }
+        stage('Hal') {
+          agent {
+           label 'docker'
+          }      
+          stages {
+            stage('Build Migrations docker image') {
+              steps {
+                buildMigrationsdockerImage()
+              }
+            }
+            stage('Liquibase migration') {
+              steps {
+                liquibaseMigration('hal')
+                
+                }
+              post {
+                always {
+                  dir('migrations') {
+                    archiveArtifacts artifacts: 'migration-plan.sql', fingerprint: false
+                  }
+                }
+                failure {
+                    script {
+                        if("${env.BRANCH_NAME}" == 'master') {
+                          office365ConnectorSend message: "Liquibase Migration for ${halEnv} Failed! ${env.JOB_NAME} - ${env.BUILD_NUMBER}", status: "Failure", color: "d00000", webhookUrl: buildfailureWebhook
+                        }
+                    }
+                }
+              }
+            }
+            stage('Deploy') {
+                steps {
+                    deployerDeploy('hal')
+                }
+                post {
+                    success {
+                        office365ConnectorSend message: "Deployed Hal ${env.JOB_NAME} - ${env.BUILD_NUMBER} - ${getAppVersionWithBranchName()}", status: "Success", color: "50df16", webhookUrl: backendWebhook
+                    }                    
+                }
+              }
+              stage('DeployRules') {
+                steps {
+                    deployerDeployRules('hal')
+                }
+                post {
+                    success {
+                        office365ConnectorSend message: "Deployed Hal Rules Worker ${env.JOB_NAME} - ${env.BUILD_NUMBER} - ${getAppVersionWithBranchName()}", status: "Success", color: "50df16", webhookUrl: backendWebhook
+                    }                    
+                }
+              }
+              stage('DeployCalcs') {
+                steps {
+                    deployerDeployCalcs('hal')
+                }
+                post {
+                    success {
+                        office365ConnectorSend message: "Deployed Hal Calcs Worker ${env.JOB_NAME} - ${env.BUILD_NUMBER} - ${getAppVersionWithBranchName()}", status: "Success", color: "50df16", webhookUrl: backendWebhook
+                    }                    
+                }
+              }         
+            }  
+        }        
+        stage('Global') {
+          agent {
+           label 'docker'
+          }      
+          stages {
+            stage('Build Migrations docker image') {
+              steps {
+                buildMigrationsdockerImage()
+              }
+            }
+            stage('Liquibase migration') {
+              steps {
+                liquibaseMigration('global')
+                
+                }
+              post {
+                always {
+                  dir('migrations') {
+                    archiveArtifacts artifacts: 'migration-plan.sql', fingerprint: false
+                  }
+                }
+                failure {
+                    script {
+                        if("${env.BRANCH_NAME}" == 'master') {
+                          office365ConnectorSend message: "Liquibase Migration for ${globalEnv} Failed! ${env.JOB_NAME} - ${env.BUILD_NUMBER}", status: "Failure", color: "d00000", webhookUrl: buildfailureWebhook
+                        }
+                    }
+                }
+              }
+            }
+            stage('Deploy') {
+                steps {
+                    deployerDeploy('global')                                     
+                }
+                post {
+                    success {
+                        office365ConnectorSend message: "Deployed Global ${env.JOB_NAME} - ${env.BUILD_NUMBER} - ${getAppVersionWithBranchName()}", status: "Success", color: "50df16", webhookUrl: backendWebhook
+                    }                    
+                }
+            }
+            stage('DeployRules') {
+                steps {
+                    deployerDeployRules('global')                                     
+                }
+                post {
+                    success {
+                        office365ConnectorSend message: "Deployed Global Rules Worker${env.JOB_NAME} - ${env.BUILD_NUMBER} - ${getAppVersionWithBranchName()}", status: "Success", color: "50df16", webhookUrl: backendWebhook
+                    }                    
+                }
+            }
+            stage('DeployCalcs') {
+                steps {
+                    deployerDeployCalcs('global')                                     
+                }
+                post {
+                    success {
+                        office365ConnectorSend message: "Deployed Global Calcs Worker ${env.JOB_NAME} - ${env.BUILD_NUMBER} - ${getAppVersionWithBranchName()}", status: "Success", color: "50df16", webhookUrl: backendWebhook
+                    }                    
+                }
+            }          
+          }  
+        }        
+      }
+     }
+    }
+    }
+    stage("Get Approval for Batch-5 Deployment") {  
+            when {
+                branch 'master'
+            }          
+            steps {
+                office365ConnectorSend message: "Please Approve to Deploy in Production!! - ${env.JOB_NAME} - ${env.BUILD_NUMBER}", status: "Approval_Pending", color: "50df16", webhookUrl: approvalrequestWebhook
+                input "Please Approve to Proceed with Deployment"
+            }
+            post {
+            success {
+              office365ConnectorSend message: "Got Approval for Deployment!! - ${env.JOB_NAME} - ${env.BUILD_NUMBER}", status: "Success", color: "50df16", webhookUrl: approvalrequestWebhook
+            }            
+          }
+    }
+    stage('Deploy to Production-5') {
+      when {
+           branch 'master'
+           beforeAgent true
+         }
+    stages {  
+     stage('Deployment in Parallel') {      
+      parallel {
+        stage('Deploy to Carne') {
+            when {
+                branch 'master'
+                beforeAgent true
+            }
+            agent {
+                label 'docker'
+            }
+
+            stages {
+                stage('Build Migrations docker image') {
+                steps {
+                    buildMigrationsdockerImage()
+                }
+                }
+
+                stage('Liquibase migration') {
+                steps {
+                    liquibaseMigration('carne')
+                }
+                post {
+                    always {
+                    dir('migrations') {
+                        archiveArtifacts artifacts: 'migration-plan.sql', fingerprint: false
+                    }
+                    }
+                    failure {
+                    script {
+                        if("${env.BRANCH_NAME}" == 'master') {
+                        office365ConnectorSend message: "Liquibase Migration for ${carneEnv} Failed! ${env.JOB_NAME} - ${env.BUILD_NUMBER}", status: "Failure", color: "d00000", webhookUrl: buildfailureWebhook
+                        }
+                    }
+                    }
+                }
+                }
+
+                stage('Deploy') {
+                steps {
+                    deployerDeploy('carne')                                      
+                }
+                post {
+                    success {
+                        office365ConnectorSend message: "Deployed Carne ${env.JOB_NAME} - ${env.BUILD_NUMBER} - ${getAppVersionWithBranchName()}", status: "Success", color: "50df16", webhookUrl: backendWebhook
+                    }                    
+                }
+            }
+                stage('DeployRules') {
+                steps {
+                    deployerDeployRules('carne')                                      
+                }
+                post {
+                    success {
+                        office365ConnectorSend message: "Deployed Carne Rules worker ${env.JOB_NAME} - ${env.BUILD_NUMBER} - ${getAppVersionWithBranchName()}", status: "Success", color: "50df16", webhookUrl: backendWebhook
+                    }                    
+                }
+            }
+                stage('DeployCalcs') {
+                steps {
+                    deployerDeployCalcs('carne')                                      
+                }
+                post {
+                    success {
+                        office365ConnectorSend message: "Deployed Carne Calcs Worker ${env.JOB_NAME} - ${env.BUILD_NUMBER} - ${getAppVersionWithBranchName()}", status: "Success", color: "50df16", webhookUrl: backendWebhook
+                    }                    
+                }
+                }
+            }
+        }
+        stage('Bailliegifford') {
+          agent {
+           label 'docker'
+          }      
+          stages {
+            stage('Build Migrations docker image') {
+              steps {
+                buildMigrationsdockerImage()
+              }
+            }
+            stage('Liquibase migration') {
+              steps {
+                liquibaseMigration('bailliegifford')
+                
+                }
+              post {
+                always {
+                  dir('migrations') {
+                    archiveArtifacts artifacts: 'migration-plan.sql', fingerprint: false
+                  }
+                }
+                failure {
+                    script {
+                        if("${env.BRANCH_NAME}" == 'master') {
+                          office365ConnectorSend message: "Liquibase Migration for ${bailliegiffordEnv} Failed! ${env.JOB_NAME} - ${env.BUILD_NUMBER}", status: "Failure", color: "d00000", webhookUrl: buildfailureWebhook
+                        }
+                    }
+                }
+              }
+            }
+            stage('Deploy') {
+                steps {
+                    deployerDeploy('bailliegifford')
+                }
+                post {
+                    success {
+                        office365ConnectorSend message: "Deployed Bailliegifford ${env.JOB_NAME} - ${env.BUILD_NUMBER} - ${getAppVersionWithBranchName()}", status: "Success", color: "50df16", webhookUrl: backendWebhook
+                    }                    
+                }
+            }
+            stage('DeployRules') {
+                steps {
+                    deployerDeployRules('bailliegifford')
+                }
+                post {
+                    success {
+                        office365ConnectorSend message: "Deployed Bailliegifford Rules Worker ${env.JOB_NAME} - ${env.BUILD_NUMBER} - ${getAppVersionWithBranchName()}", status: "Success", color: "50df16", webhookUrl: backendWebhook
+                    }                    
+                }
+            }
+            stage('DeployCalcs') {
+                steps {
+                    deployerDeployCalcs('bailliegifford')
+                }
+                post {
+                    success {
+                        office365ConnectorSend message: "Deployed Bailliegifford Calcs Worker ${env.JOB_NAME} - ${env.BUILD_NUMBER} - ${getAppVersionWithBranchName()}", status: "Success", color: "50df16", webhookUrl: backendWebhook
+                    }                    
+                }
+            }          
+          }  
+        }
+        stage('Onefund') {
+          agent {
+           label 'docker'
+          }      
+          stages {
+            stage('Build Migrations docker image') {
+              steps {
+                buildMigrationsdockerImage()
+              }
+            }
+            stage('Liquibase migration') {
+              steps {
+                liquibaseMigration('onefund')
+                
+                }
+              post {
+                always {
+                  dir('migrations') {
+                    archiveArtifacts artifacts: 'migration-plan.sql', fingerprint: false
+                  }
+                }
+                failure {
+                    script {
+                        if("${env.BRANCH_NAME}" == 'master') {
+                          office365ConnectorSend message: "Liquibase Migration for ${onefundEnv} Failed! ${env.JOB_NAME} - ${env.BUILD_NUMBER}", status: "Failure", color: "d00000", webhookUrl: buildfailureWebhook
+                        }
+                    }
+                }
+              }
+            }
+            stage('Deploy') {
+                steps {
+                    deployerDeploy('onefund')
+                }
+                post {
+                    success {
+                        office365ConnectorSend message: "Deployed Onefund ${env.JOB_NAME} - ${env.BUILD_NUMBER} - ${getAppVersionWithBranchName()}", status: "Success", color: "50df16", webhookUrl: backendWebhook
+                    }                    
+                }
+            }
+            stage('DeployRules') {
+                steps {
+                    deployerDeployRules('onefund')
+                }
+                post {
+                    success {
+                        office365ConnectorSend message: "Deployed Onefund Rules Worker ${env.JOB_NAME} - ${env.BUILD_NUMBER} - ${getAppVersionWithBranchName()}", status: "Success", color: "50df16", webhookUrl: backendWebhook
+                    }                    
+                }
+            }
+            stage('DeployCalcs') {
+                steps {
+                    deployerDeployCalcs('onefund')
+                }
+                post {
+                    success {
+                        office365ConnectorSend message: "Deployed Onefund Calcs Worker ${env.JOB_NAME} - ${env.BUILD_NUMBER} - ${getAppVersionWithBranchName()}", status: "Success", color: "50df16", webhookUrl: backendWebhook
+                    }                    
+                }
+            }         
+            }  
+          }
+        stage('Disclosures') {
+          agent {
+           label 'docker'
+          }      
+          stages {
+            stage('Build Migrations docker image') {
+              steps {
+                buildMigrationsdockerImage()
+              }
+            }
+            stage('Liquibase migration') {
+              steps {
+                liquibaseMigration('disclosures')
+                
+                }
+              post {
+                always {
+                  dir('migrations') {
+                    archiveArtifacts artifacts: 'migration-plan.sql', fingerprint: false
+                  }
+                }
+                failure {
+                    script {
+                        if("${env.BRANCH_NAME}" == 'master') {
+                          office365ConnectorSend message: "Liquibase Migration for ${disclosuresEnv} Failed! ${env.JOB_NAME} - ${env.BUILD_NUMBER}", status: "Failure", color: "d00000", webhookUrl: buildfailureWebhook
+                        }
+                    }
+                }
+              }
+            }
+            stage('Deploy') {
+                steps {
+                    deployerDeploy('disclosures')
+                }
+                post {
+                    success {
+                        office365ConnectorSend message: "Deployed Disclosures ${env.JOB_NAME} - ${env.BUILD_NUMBER} - ${getAppVersionWithBranchName()}", status: "Success", color: "50df16", webhookUrl: backendWebhook
+                    }                    
+                }
+              }
+              stage('DeployRules') {
+                steps {
+                    deployerDeployRules('disclosures')
+                }
+                post {
+                    success {
+                        office365ConnectorSend message: "Deployed Disclosures Rules Worker ${env.JOB_NAME} - ${env.BUILD_NUMBER} - ${getAppVersionWithBranchName()}", status: "Success", color: "50df16", webhookUrl: backendWebhook
+                    }                    
+                }
+              }
+              stage('DeployCalcs') {
+                steps {
+                    deployerDeployCalcs('disclosures')
+                }
+                post {
+                    success {
+                        office365ConnectorSend message: "Deployed Disclosures Calcs Worker ${env.JOB_NAME} - ${env.BUILD_NUMBER} - ${getAppVersionWithBranchName()}", status: "Success", color: "50df16", webhookUrl: backendWebhook
+                    }                    
+                }
+              }         
+            }  
+        }        
+      }
+     }
+    }
+    }
+    stage("Get Approval for Evelyn Deployment") {  
+            when {
+                branch 'master'
+            }          
+            steps {
+                office365ConnectorSend message: "Please Approve to Deploy in Production!! - ${env.JOB_NAME} - ${env.BUILD_NUMBER}", status: "Approval_Pending", color: "50df16", webhookUrl: approvalrequestWebhook
+                input "Please Approve to Proceed with EVELYN Deployment"
+            }
+            post {
+            success {
+              office365ConnectorSend message: "Got Approval for Evelyn Deployment!! - ${env.JOB_NAME} - ${env.BUILD_NUMBER}", status: "Success", color: "50df16", webhookUrl: approvalrequestWebhook
+            }            
+          }
+    }
+    stage('Deploy to Evelyn') {
+      when {
+        branch 'master'
+        beforeAgent true
+      }
+      agent {
+        label 'docker'
+      }
+
+      stages {
+        stage('Build Migrations docker image') {
+          steps {
+            dir("migrations") {
+              sh "docker build -t local/migrations ."
+            }
+          }
+        }
+        stage('Liquibase migration') {
+          steps {
+            namedLiquibaseMigration('evelyn')
+          }
+          post {
+            always {
+              dir('migrations') {
+                archiveArtifacts artifacts: 'migration-plan.sql', fingerprint: false
+              }
+            }
+            failure {
+              script {
+                if("${env.BRANCH_NAME}" == 'master') {
+                  office365ConnectorSend message: "Liquibase Migration for ${evelynEnv} Failed! ${env.JOB_NAME} - ${env.BUILD_NUMBER}", status: "Failure", color: "d00000", webhookUrl: buildfailureWebhook
+                }
+              }
+            }
+          }
+        }
+        stage('Deploy') {
+          steps {
+              deployerDeploy('evelyn')                                      
+          }
+          post {
+              success {
+                  office365ConnectorSend message: "Deployed Evelyn ${env.JOB_NAME} - ${env.BUILD_NUMBER} - ${getAppVersionWithBranchName()}", status: "Success", color: "50df16", webhookUrl: backendWebhook
+              }                    
+          }
+      }
+        stage('DeployRules') {
+          steps {
+              deployerDeployRules('evelyn')                                      
+          }
+          post {
+              success {
+                  office365ConnectorSend message: "Deployed Evelyn Rules worker ${env.JOB_NAME} - ${env.BUILD_NUMBER} - ${getAppVersionWithBranchName()}", status: "Success", color: "50df16", webhookUrl: backendWebhook
+              }                    
+          }
+      }
+        stage('DeployCalcs') {
+          steps {
+              deployerDeployCalcs('evelyn')                                      
+          }
+          post {
+              success {
+                  office365ConnectorSend message: "Deployed Evelyn Calcs Worker ${env.JOB_NAME} - ${env.BUILD_NUMBER} - ${getAppVersionWithBranchName()}", status: "Success", color: "50df16", webhookUrl: backendWebhook
+              }                    
+          }
+        }
+      }
+    }
+  }
+  post {
+    failure {
+      script {
+        if("${env.BRANCH_NAME}" == 'master' || "${env.BRANCH_NAME}" == 'development' || "${env.BRANCH_NAME}" == 'release') {
+          office365ConnectorSend message: "CI Pipeline Failed! ${env.JOB_NAME} - ${env.BUILD_NUMBER}", status: "Failure", color: "d00000", webhookUrl: buildfailureWebhook
+        }
+      }
+    }
+    unstable {
+      script {
+        if("${env.BRANCH_NAME}" == 'master' || "${env.BRANCH_NAME}" == 'development' || "${env.BRANCH_NAME}" == 'release') {
+          office365ConnectorSend message: "CI Pipeline is unstable. ${env.JOB_NAME} - ${env.BUILD_NUMBER}", status: "Unstable", color: "ffcc00", webhookUrl: devopsWebhook
+        }
+      }
+    }
+    aborted {
+      script {
+        if("${env.BRANCH_NAME}" == 'master' || "${env.BRANCH_NAME}" == 'development' || "${env.BRANCH_NAME}" == 'release') {
+          office365ConnectorSend message: "CI Pipeline Aborted! ${env.JOB_NAME} - ${env.BUILD_NUMBER}", status: "Aborted", color: "999999", webhookUrl: buildfailureWebhook
+        }
+      }
+    }
+  }
+}
