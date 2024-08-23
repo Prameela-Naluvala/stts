@@ -1,0 +1,35 @@
+FROM maven:3.6-openjdk-17-slim AS build
+
+# Update apt sources
+RUN sed -i 's/deb.debian.org/archive.debian.org/g' /etc/apt/sources.list
+RUN sed -i 's/stable\/updates/stable-security\/updates/' /etc/apt/sources.list
+RUN sed -i '6 s/^/#/' /etc/apt/sources.list
+RUN rm -f /etc/apt/sources.list.d/stretch-backports.list
+
+# Install libfreetype6
+RUN apt-get update && apt-get install -y libfreetype6 && rm -rf /var/lib/apt/lists/*
+
+RUN mkdir /work
+WORKDIR /work
+COPY pom.xml .
+RUN mvn verify clean --fail-never -DskipTests=true
+COPY src/main src/main
+RUN mvn package -DskipTests=true
+
+FROM maven:3.6-openjdk-17-slim
+
+# Update apt sources
+RUN sed -i 's/deb.debian.org/archive.debian.org/g' /etc/apt/sources.list
+RUN sed -i 's/stable\/updates/stable-security\/updates/' /etc/apt/sources.list
+RUN sed -i '6 s/^/#/' /etc/apt/sources.list
+RUN rm -f /etc/apt/sources.list.d/stretch-backports.list
+
+# Install libfreetype6
+RUN apt-get update && apt-get install -y libfreetype6 netcat && rm -rf /var/lib/apt/lists/*
+
+# Install aws-env
+RUN curl -L https://github.com/Droplr/aws-env/raw/master/bin/aws-env-linux-amd64 -o/usr/local/bin/aws-env && \
+    chmod +x /usr/local/bin/aws-env && aws-env
+
+COPY --from=build /work/target/highwire-1.0-SNAPSHOT.jar /usr/app/highwire.jar
+CMD bash -c 'eval $(aws-env) && java -XX:InitialRAMPercentage=70.0 -XX:MaxRAMPercentage=70.0 -jar /usr/app/highwire.jar'
