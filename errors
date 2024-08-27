@@ -1,36 +1,28 @@
-[ERROR] Errors:
+Hi Prameela 
 
-highwire-junit-1  | [ERROR]   ReportServiceImplTest.exportAifmdHoldingReport_As_Excel:764 » Internal java.la...
+Please draft mail that you would like to send to Darren. I want to review that. 
 
-highwire-junit-1  | [ERROR]   ReportServiceImplTest.exportAifmdHoldingUkReport_As_Excel:774 » Internal java....
- 
-ERROR] com.fundsaxis.highwire.reports.services.ReportServiceImplTest.exportAifmdHoldingUkReport_As_Excel  Time elapsed: 0.941 s  <<< ERROR!
+summary should be provided in the mal which will help Darren to quickly understand. If there are points you want to highlight, you should do that as well. 
 
-highwire-junit-1  | java.lang.InternalError: java.lang.reflect.InvocationTargetException
 
-highwire-junit-1  |     at com.fundsaxis.highwire.reports.services.ReportServiceImplTest.exportAifmdHoldingUkReport_As_Excel(ReportServiceImplTest.java:774)
+Regards,
+Paddy 
 
-highwire-junit-1  | Caused by: java.lang.reflect.InvocationTargetException
 
-highwire-junit-1  |     at com.fundsaxis.highwire.reports.services.ReportServiceImplTest.exportAifmdHoldingUkReport_As_Excel(ReportServiceImplTest.java:774)
 
-highwire-junit-1  | Caused by: java.lang.NullPointerException: Cannot load from short array because "sun.awt.FontConfiguration.head" is null
+Subject: AWS Cost update
 
-highwire-junit-1  |     at com.fundsaxis.highwire.reports.services.ReportServiceImplTest.exportAifmdHoldingUkReport_As_Excel(ReportServiceImplTest.java:774)
+Hi Paddy, Harshaa,
 
-highwire-junit-1  |
+Please refer the   ExcelReport  for July cost details.
 
-highwire-junit-1  | [ERROR] com.fundsaxis.highwire.reports.services.ReportServiceImplTest.exportAifmdHoldingReport_As_Excel  Time elapsed: 0.293 s  <<< ERROR!
+Sheet1 – Cost Increase -> It holds the details of cost for services additions or upgrades in July comparing with June
+Sheet 2 – Client-wise cost -> It holds cost for each client
+Sheet 3 – xmlvalidator cost -> It holds xmlvalidator total cost and individual cost for all clients
 
-highwire-junit-1  | java.lang.InternalError: java.lang.reflect.InvocationTargetException
+For August till date cost is £15,562.44
 
-highwire-junit-1  |     at com.fundsaxis.highwire.reports.services.ReportServiceImplTest.exportAifmdHoldingReport_As_Excel(ReportServiceImplTest.java:764)
+Is it okay to share this update with Darren?
 
-highwire-junit-1  | Caused by: java.lang.reflect.InvocationTargetException
-
-highwire-junit-1  |     at com.fundsaxis.highwire.reports.services.ReportServiceImplTest.exportAifmdHoldingReport_As_Excel(ReportServiceImplTest.java:764)
-
-highwire-junit-1  | Caused by: java.lang.NullPointerException: Cannot load from short array because "sun.awt.FontConfiguration.head" is null
-
-highwire-junit-1  |     at com.fundsaxis.highwire.reports.services.ReportServiceImplTest.exportAifmdHoldingReport_As_Excel(ReportServiceImplTest.java:764)
- 
+Thanks,
+Prameela
