@@ -1,3 +1,21 @@
+Hi Darren,
+
+I hope you're well.
+
+I've completed the cost analysis for our AWS infrastructure for July, and I wanted to share the details with you. The Excel report attached contains a breakdown of the costs:
+
+Sheet 1 – Cost Increase: This sheet outlines the cost impact of any service additions or upgrades in July compared to June.
+Sheet 2 – Client-wise Cost: This sheet provides a detailed view of the costs associated with each client.
+Sheet 3 – XML Validator Cost: This sheet includes both the total cost and the individual costs related to the XML validator for all clients.
+As of August, the cost incurred to date stands at £15,562.44.
+
+Please let me know if you have any questions or need further details.
+
+Best regards,
+Prameela
+
+
+
 
 S.No	Service added/upgraded	USD/hour(July)	USD/hour(June)	No.Of hours	July Cost	June Cost	Change
 1	Test-thesis backup on Test Environment 	0.704	0.035	182	$128.13 	$6.37 	$121.76 
