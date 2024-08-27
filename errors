@@ -1,3 +1,12 @@
+
+S.No	Service added/upgraded	USD/hour(July)	USD/hour(June)	No.Of hours	July Cost	June Cost	Change
+1	Test-thesis backup on Test Environment 	0.704	0.035	182	$128.13 	$6.37 	$121.76 
+2	Internal sisense addition						$82.32 
+3	prod-stats  rds	0.069	0.035	744	$51.34 	$26.04 	$25.30 
+4	carne				$203.87 	$100.00 	$103.87 
+5	evelyn-xml						$30.36 
+6	Transition-rds upgraded 	0.069	0.035	744	$51.34 	$26.04 	$25.30 
+7	Sumologic (For Infra Cloudwatch, S3 etc) 				$1,338.99 	389.26	$949.73 
 Hi Prameela 
 
 Please draft mail that you would like to send to Darren. I want to review that. 
